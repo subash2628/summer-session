@@ -206,6 +206,53 @@ Nginx (port 80)
 
 ---
 
+## Deployment to AWS ECS — Key Learnings
+
+Some students attempted deploying the same Docker Compose stack to **Amazon ECS** instead of a plain EC2 instance with `docker compose up`. ECS is a different model, and several non-obvious issues come up that are worth understanding:
+
+### 1. ECS does not run `docker-compose.yml` directly
+ECS has no "upload your Compose file" feature. Each Compose service must be translated manually into an **ECS Task Definition** (containers, images, ports, env vars) and an **ECS Service** (how many copies run, networking, load balancing). Tools like the ECS CLI, Copilot, or Terraform can automate this translation, but the console does not do it for you.
+
+### 2. Local bind mounts don't exist on ECS
+A line like:
+```yaml
+volumes:
+  - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+```
+works on your own machine because the file is right there. On ECS there is no local project folder to mount from — the task only has the container image. **Fix:** bake the config file into a custom image at build time:
+```dockerfile
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+```
+
+### 3. Container-to-container networking differs from Compose
+In Docker Compose, containers reach each other by **service name** (`http://api:8000`) because Compose creates its own DNS-enabled network. In ECS with `awsvpc` network mode (the default for Fargate), all containers **within the same task** share a single network interface and talk to each other over **`localhost`**, not by service name:
+```nginx
+# Docker Compose:
+proxy_pass http://api:8000;
+
+# ECS (same task, awsvpc mode):
+proxy_pass http://localhost:8000;
+```
+This only works if both containers are defined in the **same task definition**. If `api` and `nginx` are deployed as two separate ECS services/tasks, neither `localhost` nor the bare service name will work — you'd need ECS Service Connect or Cloud Map service discovery instead. The simplest fix matching a Compose mental model is to **keep both containers in one task definition**.
+
+### 4. The load balancer, not the task, is the internet-facing layer
+Unlike a single EC2 instance where you hit the box's IP directly, ECS services are reached via the **Application Load Balancer's DNS name** — task IPs are ephemeral and change on every restart. Getting a service reachable from the internet requires all of these to line up:
+- The ALB is **internet-facing** (not internal)
+- The ALB's security group allows inbound HTTP (port 80) from `0.0.0.0/0`
+- The ALB has a **listener** on port 80 forwarding to the right **target group**
+- The target group's health check path returns a 200 (commonly `/`)
+- The task's own security group allows inbound traffic from the ALB
+
+A "503 Service Temporarily Unavailable" from the ALB almost always means the target group has no healthy targets — the task isn't running, isn't listening on the expected port, or the health check path is wrong.
+
+### 5. AWS "Express Mode" only supports a single container image
+ECS Express Mode is a simplified flow built for one-image-per-service deployments. It cannot host a multi-container task (e.g. `api` + `nginx` sharing `localhost`). Multi-container tasks must use a **standard ECS service** created from a task definition with multiple container definitions.
+
+**Practical takeaway for students:** Docker Compose's simplicity (shared network, named services, local volumes) comes from assumptions ECS does not share. Translating a Compose file to ECS means re-expressing each assumption explicitly: bake configs into images, keep containers that share `localhost` in one task definition, and wire up the ALB → target group → task networking chain manually.
+
+---
+
 ## Assessment Checkpoints
 
 | Checkpoint | Deliverable |
