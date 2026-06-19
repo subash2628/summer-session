@@ -29,15 +29,14 @@ summer_session/
 │   └── workshop1_preprocessing_model.ipynb   # Workshop 1 — Tasks 1–3
 ├── api/
 │   ├── main.py                    # FastAPI app with /predict endpoint
+│   ├── model.pkl                  # trained Decision Tree (max_depth=3, ~80% accuracy)
 │   ├── requirements.txt
 │   └── static/
 │       └── index.html             # HTML form + fetch() frontend
 ├── nginx/
 │   └── nginx.conf                 # reverse proxy config
 ├── Dockerfile                     # builds the API container
-├── docker-compose.yml             # api + nginx services
-└── planning/
-    └── Week_Session_Plan_Data_to_Deployment.md
+└── docker-compose.yml             # api (nishan9848/summer-project) + nginx (nishan9848/nginx-summer)
 ```
 
 ---
@@ -130,12 +129,19 @@ Expected response: `{"survived": false}`
 
 ### Workshop 2 — Run with Docker Compose (API + Nginx)
 
+Both services use pre-built Docker Hub images — no local build required.
+
 ```bash
-docker compose up --build
+docker compose up
 ```
 
 - Frontend via Nginx: http://localhost
 - `/predict` via Nginx: http://localhost/predict
+
+| Service | Image |
+|---------|-------|
+| API (FastAPI) | `nishan9848/summer-project:latest` |
+| Nginx | `nishan9848/nginx-summer:latest` |
 
 ---
 
@@ -192,9 +198,9 @@ Nginx (port 80)
    ```
 4. SSH in and start the services:
    ```bash
-   ssh ec2-user@<your-ec2-ip>
+   ssh ubuntu@<your-ec2-ip>
    cd summer_session
-   docker compose up -d --build
+   docker compose up -d
    ```
 5. Visit `http://<your-ec2-ip>` in a browser.
 
