@@ -1,6 +1,7 @@
 services:
   api:
-    build: .
+    # build: .
+    image: nishan9848/summer-project
     expose:
       - "8000"
 
