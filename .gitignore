@@ -15,9 +15,6 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# Model artifacts
-*.pkl
-
 # Data
 data/*.csv
 
